@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/style.css">
+    <link href="https://fonts.googleapis.com/css?family=Roboto:300,400" rel="stylesheet">
+    <title>Dirkje</title>
+  </head>
+  <body>
+    <p data-bind="visible:loading"><img src="/img/loader.gif" class="loader" /></p>
+
+    <div id="errorDiv" data-bind="visible: errors().length > 0" class="errors">
+      Errors!
+      <ul data-bind="foreach:errors">
+        <li data-bind="text:$data"></li>
+      </ul>
+    </div>
+
+    <div class="modal-wrap">
+      <div id="loginDiv" class="modal-body" data-bind="fadeVisible: visible">
+        <h1>Welkom!</h1>
+        <p>Als dit de eerste keer is, sign up. Anders, log in!</p>
+        <h3>Spelregels:</h3>
+        <ul>
+          <li>Deelname is vrijblijvend. Bij het niet raden van de naam, verbind je je ertoe om een avond te babysitten</li>
+          <li>Als je de naam wel raadt, krijg je een etentje van ons!</li>
+        </ul>
+        <input type="email" data-bind="value:email" placeholder="E-mail" />
+        <input type="password" data-bind="value:password" placeholder="Wachtwoord" />
+        <button class="button" data-bind="click:login">Log in</button>
+        <button class="button" data-bind="click:signup">Sign up</button>
+      </div>
+
+      <div id="loggedInDiv" class="modal-body" data-bind="fadeVisible: visible">
+        <h1>Raad-je-naampje</h1>
+        <p>
+          U bent ingelogd als <span data-bind="text: user() && user().email" class="userEmail"></span>.
+          <div data-bind="visible: guessedName()">
+            Uw huidige naam is: <div data-bind="text:guessedName" class="guessedName"></div>
+            <p>Een goede keuze! Maar of het de juiste is?</p>
+          </div>
+        </p>
+
+        <button class="button" data-bind="click:gotoForm">Vul een nieuwe naam in</button>
+        <button class="button" data-bind="click:logout">Log uit</button>
+        <button class="button" data-bind="click:gotoForm, visible: adminEnabled">Naar het overzicht</button>
+      </div>
+
+      <div id="contentDiv" data-bind="fadeVisible: visible" class="modal-body">
+        <h1>Vul een nieuwe naam in</h1>
+        <p>Klik op bewaar om je nieuwe keuze officiëel te maken, of op terug om naar het beginscherm terug te keren.</p>
+        <input type="text" data-bind="value:guessedName" placeholder="Naam" />
+
+        <h4>Hints</h4>
+        <ul>
+          <li>De naam moet in alle talen uitspreekbaar zijn (of toch in het Frans, Engels en Spaans).</li>
+          <li>Er mag geen R in voorkomen.</li>
+        </ul>
+
+        <button class="button" data-bind="click:save">Bewaar</button>
+        <button class="button" data-bind="click:cancel">Terug</button>
+      </div>
+
+      <!--
+      <div id="adminDiv" data-bind="visible: adminVm.enabled() && adminVm.visible()" class="modal-body">
+      -->
+      <div id="adminDiv" data-bind="fadeVisible: visible" class="modal-body">
+        <h1>Admin part</h1>
+        Current attempts:
+        <ul data-bind="foreach:attempts">
+          <li><span data-bind="text:uid"></span>: <span data-bind="text:name"></span></li>
+        </ul>
+      </div>
+
+    </div>
+
+    <script src="/lib/jquery-3.2.0.min.js"></script>
+    <script src="/lib/knockout-3.4.2.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/3.7.5/firebase.js"></script>
+    <script>
+      // Initialize Firebase
+      var config = {
+        apiKey: "AIzaSyCBi_O49SM94mMefrWqBjWhFhseL4pDkv4",
+        authDomain: "dirkje-naam.firebaseapp.com",
+        databaseURL: "https://dirkje-naam.firebaseio.com",
+        projectId: "dirkje-naam",
+        storageBucket: "dirkje-naam.appspot.com",
+        messagingSenderId: "290830774331"
+      };
+      firebase.initializeApp(config);
+    </script>
+
+    <script>
+    ko.bindingHandlers.fadeVisible = {
+      init: function(element, valueAccessor) {},
+      update: function(element, valueAccessor) {
+          // Whenever the value subsequently changes, slowly fade the element in or out
+          if(ko.unwrap(valueAccessor()) === element.id) {
+            setTimeout(function() {
+                $(element).addClass('animate-in is-showing');
+            }, 600);
+            setTimeout(function(){
+              $(element).removeClass('animate-in');
+            }, 1200);
+          } else {
+            $(element).addClass('animate-out');
+            setTimeout(function(){
+              $(element).removeClass('animate-out is-showing');
+            }, 600);
+          };
+      }
+    };
+    </script>
+
+    <script>
+      var vm = {
+        loading: ko.observable(false),
+        loadingReason: ko.observable(),
+        errors: ko.observableArray([]),
+        warnings: ko.observableArray([]),
+        visible: ko.observable(false),
+        guessedName: ko.observable(),
+        user: ko.observable(),
+        email: ko.observable(),
+        password: ko.observable(),
+        adminEnabled: ko.observable(false),
+        attempts: ko.observableArray([]),
+        login: function() {
+          vm.loading(true);
+          vm.loadingReason("Signing user in");
+          firebase.auth().signInWithEmailAndPassword(this.email(), this.password())
+            .then(function() {
+              vm.loading(false);
+            })
+            .catch(function(error) {
+              vm.loading(false);
+              vm.errors.push(error.message);
+              console.log(error);
+            });
+        },
+        signup: function() {
+          vm.loading(true);
+          vm.loadingReason("Signing user up");
+          firebase.auth().createUserWithEmailAndPassword(vm.email(), vm.password())
+            .then(function() {
+              vm.loading(false)
+            })
+            .catch(function(error) {
+              vm.loading(false);
+              vm.errors.push(error.message);
+              console.log(error);
+            });
+        },
+        save: function() {
+          vm.loading(true);
+          vm.loadingReason("Saving");
+          firebase.database().ref('users/' + vm.user().uid)
+            .set({
+              guessedName: vm.guessedName()
+            })
+            .then(function() {
+              vm.loading(false)
+            })
+            .then(function() {
+              vm.visible("loggedInDiv");
+            })
+            .catch(function(error) {
+              vm.loading(false);
+              vm.errors.push(error.message);
+              console.log(error);
+            });
+        },
+        cancel: function() {
+          vm.visible("loggedInDiv");
+        },
+        logout: function() {
+          vm.loading(true);
+          vm.loadingReason("Logging out");
+          firebase.auth().signOut()
+            .then(function() {
+              vm.loading(false)
+            })
+            .catch(function(error) {
+              vm.loading(false);
+              vm.errors.push(error.message);
+              console.log(error);
+            });
+        },
+        gotoForm: function() {
+          vm.visible("contentDiv");
+        }
+      };
+    </script>
+
+    <script>
+      var admins = [ "KNtpJOGYW1Uux2trRBn8l1qf0v02" ];
+      ko.applyBindings(vm);
+    </script>
+
+    <script>
+      firebase.auth().onAuthStateChanged(function(user) {
+        if (user) {
+          vm.loading(true);
+          vm.loadingReason("Loading user data");
+          firebase.database().ref('users/' + user.uid).once('value')
+            .then(function(snapshot) {
+              if(snapshot.val() && snapshot.val().guessedName) {
+                vm.guessedName(snapshot.val().guessedName);
+              } else {
+                vm.warnings.push("No guessed name found for user");
+              }
+            })
+            .then(function() {
+              vm.loading(false)
+            });
+          vm.user(user);
+          vm.visible('loggedInDiv');
+
+          if(admins.findIndex(admin => user.uid === admin) > -1) {
+            vm.adminEnabled(true);
+            vm.attempts([]);
+            firebase.database().ref('users/').on('child_added', function(snapshot) {
+                vm.attempts.push({
+                  uid: snapshot.key,
+                  name: snapshot.val().guessedName
+                })
+              });
+          } else {
+            vm.adminEnabled(false);
+          }
+        } else {
+          vm.adminEnabled(false);
+          vm.user(undefined);
+          vm.guessedName(undefined);
+          vm.visible("loginDiv");
+        }
+      });
+    </script>
+  </body>
+</html>
